@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Make sure that you have configured this file to your heart's desire. 
+# It is recommended to install arch manually at least once (so that you know what you're doing).
+# Oh and remember, scripts are DUMB !!
+
+if [ "$EUID" -ne 0 ]; then 
+  echo "Please run as root."
+  exit
+fi
+
+input () {
+  printf "%s " "$1"
+  read var
+
+  if [ "$var" == "o" ]; then
+    printf "$2"
+    read var
+  fi
+
+  out="$var"
+}
+
+input "First off, which version of arch linux do you want. (Always press o for more options)." "
+Here are the different versions of arch you can install : 
+- 3 to install arch linux for the pi 3
+- 2 to install arch linux for the pi 2\n"
+version=$out
+
+input "Now, do you want to enable wifi after having installed arch" "\nJust press 'y' for yes and 'n' for no\n"
+wifi=$out
+
+input "Ok, do you also want to enable usb boot on your arch system" "\nJust press 'y' for yes and 'n' for no\n"
+usb=$out
+
+read -p "Ok, now make sure that you're storage medium is on your computer"
+
+lsblk
+input "Could you please point me out where to install arch" "\nJust enter any disk that you want to install arch on (default : mmcblk0)"
+if [ $out == "" ]; then
+  pnt="mmcblk0"
+  part1="p1"
+  part2="p2"
+else
+  pnt=$out
+fi
+
+input "Are you sure you want to install arch on $pnt" "Just enter 'y' for yes or 'n' for no"
+if [ "$out" == "n" ]; then
+  echo Ok, exitting.
+  exit 1
+elif [ "$out" == "y" ]; then
+  sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | fdisk /dev/${install_pnt}
+  o
+  n
+
+
+
+  +100M
+  t
+  c
+  n
+
+
+
+
+  w
+EOF
+fi
+
+input "Ok
