@@ -2,7 +2,7 @@
 
 # Make sure that you have configured this file to your heart's desire. 
 # It is recommended to install arch manually at least once (so that you know what you're doing).
-# Oh and remember, scripts are DUMB !!
+# Oh and remember, scripts are DUMB !
 
 if [ "$EUID" -ne 0 ]; then 
   echo "Please run as root."
