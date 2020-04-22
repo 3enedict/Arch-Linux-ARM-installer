@@ -1,143 +1,240 @@
 #!/bin/bash
 
 # Make sure that you have configured this file to your heart's desire. 
-# It is recommended to install arch manually at least once (so that you know what you're doing).
-# Oh and remember, scripts are DUMB !!!
+# It is recommended to install arch manually at least once (so that you know what you're doing).
+# Oh and remember, scripts are DUMB !
 
 if [ "$EUID" -ne 0 ]; then 
   echo "Please run as root."
   exit
 fi
 
-lsblk
-echo Could you please point me out where to install arch ? Always press 0 for options.
-read install_pnt
+ui_check () {
+  firstitem=$1
+  options=""
+  shift;
+  for item in "$@" ; do
+    options="$options/$item"
+  done
+  printf "%s (%s) : " "$firstitem" "${options:1}"
+  read var
 
-if [ $install_pnt -eq '0' ]; then
-  echo These are the preinstalled options : 
-  echo   - 1 : sdb
-  echo   - 2 : sdc
-  echo   - 3 : mmcblk0
-  echo
-  read install_pnt
+  go=0
+  while [ $go -eq 0 ]; do
+    for item in "$@" ; do
+      if [ "$item" == "$var" ]; then
+        go=1
+      fi
+    done
+    if [ $go -eq 0 ]; then
+      printf "I am sorry but the value that you just gave me is not valid. Check the options up top : "
+      read var
+    fi
+  done
+
+  ret=$var
+}
+
+ui_check_disk () {
+  lsblk
+  firstitem=$1
+  shift;
+
+  proceed=0
+  while [ $proceed -eq 0 ]; do
+    printf "\n$firstitem : "
+    read storage
+
+    for item in "$@" ; do
+      IFS=':'
+      array=( $item )
+      if [ "$storage" == "${array[0]}" ]; then
+        storage="${array[1]}"
+      fi
+    done
+
+
+    if [ -b /dev/$storage ]; then
+      ui_check "Are you sure you want to use '/dev/$storage'" "y" "n"
+      use=$ret
+      if [ "$use" == "y" ]; then
+        proceed=1
+      else
+        printf "Ok. "
+      fi
+    else 
+      printf "It seems that '/dev/$storage' does not exist. "
+    fi
+  done
+
+  ret=$storage
+}
+
+confirm () {
+  proceed=0
+  while [ $proceed -eq 0 ]; do
+    printf "Could you please give me $1 : "
+    read conf1
+
+    ui_check "Is '$conf1' correct" "y" "n"
+    if [ "$ret" == "y" ]; then
+      proceed=1
+    else 
+      printf "Ok. "
+    fi
+  done
+
+  ret=$conf1
+}
+
+
+ui_check "First off, which version of arch linux do you want to install" 2 3
+version=$ret
+
+ui_check "Do you want to enable usb boot" "y" "n"
+usb=$ret
+if [ "$usb" == "y" ] && [ $version -eq 3 ]; then
+  printf "In that case, you are going to have to use arch linux version 2\n" 
+  version=2
 fi
 
-if [ $install_pnt -eq '1' ]; then
-  install_pnt='sdb'
-elif [ $install_pnt -eq '2' ]; then
-  install_pnt='sdc'
-elif [ $install_pnt -eq '3' ]; then
-  install_pnt='mmcblk0'
+ui_check "Do you want to enable the pi's camera" "y" "n"
+cam=$ret
+
+ui_check "Do you want to enable wifi" "y" "n"
+wifi=$ret 
+if [ "$wifi" == "y" ]; then
+  confirm "your router's SSID"
+  SSID=$ret
+  confirm "your router's password"
+  pass=$ret
 fi
 
-echo Are you sure you want to install arch linux on $install_pnt ?
-read agree
-
-if [ $agree -eq '0' ]; then
-  echo These are the preinstalled options : 
-  echo   - n or no : stop program
-  echo   - anything else : continue program
-  echo
-  read agree
+printf "What do you want the main user's name to be (default is alarm) : "
+read name
+if [ "$name" == "" ]; then
+  name="alarm"
 fi
 
-if [ "$agree" == "n" ] || [ "$agree" == "no"]; then
-  echo Ok, exitting.
-  exit 1
-else
-  sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | fdisk /dev/${install_pnt}
-  o
-  n
+confirm "$name's password"
+pass_main=$ret
+
+confirm "root's password"
+pass_root=$ret
+
+read -p "Ok, you can now plug in your storage device (press enter to continue)"
+
+ui_check_disk "Could you give me the disk you want to install arch on (sd = mmcblk0)" "sd:mmcblk0"
+disk=$ret
+if [ "$use" == "y" ]; then
+  sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | fdisk /dev/${disk}
+o
+n
 
 
 
-  +100M
-  t
-  c
-  n
++100M
+t
+c
+n
 
 
 
 
-  w
+w
 EOF
 fi
 
-lsblk
-echo Could you please point me out the first partition ?
-read partition1
+ui_check_disk "Could you point me to the first partition of $disk (sd = mmcblk0p1)" "sd:mmcblk0p1"
+part1=$ret
 
-if [ $partition1 -eq '0' ]; then
-  echo These are the preinstalled options : 
-  echo   - 1 : sdb1
-  echo   - 2 : sdc1
-  echo   - 3 : mmcblk0p1
-  echo   - 4 : sdb1 and sdb2
-  echo   - 5 : sdc1 and sdc2
-  echo   - 6 : mmcblk0p1 and mmcblk0p2
-  echo
-  read partition1
-fi
-
-if [ $partition1 -eq '1' ]; then
-  partition1='sdb1'
-  echo Could you now point me out the second partition ?
-  read partition2
-elif [ $partition1 -eq '2' ]; then
-  partition1='sdc1'
-  echo Could you now point me out the second partition ?
-  read partition2
-elif [ $partition1 -eq '3' ]; then
-  partition1='mmcblk0p1'
-  echo Could you now point me out the second partition ?
-  read partition2
-elif [ $partition1 -eq '4' ]; then
-  partition1='sdb1'
-  partition2='sdb2'
-elif [ $partition1 -eq '5' ]; then
-  partition1='sdc1'
-  partition2='sdc2'
-elif [ $partition1 -eq '6' ]; then
-  partition1='mmcblk0p1'
-  partition2='mmcblk0p2'
-fi
-
-mkfs.vfat /dev/${partition1}
-mkdir boot/
-mount /dev/${partition1} boot/
-
-mkfs.ext4 /dev/${partition2}
-mkdir root/
-mount /dev/${partition2} root/
-
-echo Do you want to install arch version 2 or 3 ?
-read version
-
-if [ $version -eq '0' ]; then
-  echo These are the preinstalled options :
-  echo   - 2 : installs Arch Linux ARM rpi 2 with usb boot.
-  echo   - 3 : installs Arch Linux ARM rpi 3.
-  echo
-  read version
-fi
+ui_check_disk "Could you point me to the second partition of $disk (sd = mmcblk0p2)" "sd:mmcblk0p2"
+part2=$ret
 
 if [ ! -f "ArchLinuxARM-rpi-${version}-latest.tar.gz" ]; then
   wget http://os.archlinuxarm.org/os/ArchLinuxARM-rpi-${version}-latest.tar.gz
+fi
+
+if [ ! -d "arch$version" ]; then
+  mkdir arch$version
+  bsdtar -xpf ArchLinuxARM-rpi-${version}-latest.tar.gz -C arch$version
 fi 
 
-bsdtar -xpf ArchLinuxARM-rpi-${version}-latest.tar.gz -C root
-sync
-mv root/boot/* boot
+if [ -d "root" ]; then
+  rm -r root/*
+else 
+  mkdir root
+fi
 
-if [ $version -eq '2' ]; then
+if [ -d "boot" ]; then
+  rm -r boot/*
+else 
+  mkdir boot  
+fi
+
+mkfs.vfat /dev/${part1}
+mkfs.ext4 /dev/${part2}
+mount /dev/${part1} boot/
+mount /dev/${part2} root/
+
+cp -r arch$version/* root/
+sync
+mv root/boot/* boot/
+
+if [ "$usb" == "y" ]; then
   sed -i 's/mmcblk0p2/sda2/g' boot/cmdline.txt
   sed -i 's/mmcblk0p1/sda1/g' root/etc/fstab
   echo program_usb_boot_mode=1 >> boot/config.txt 
 fi
 
-umount boot root
-rm -r boot/
-rm -r root/
+if [ "$cam" == "y" ]; then
+  echo "gpu_mem=128 start_file=start_x.elf fixup_file=fixup_x.dat" >> boot/config.txt
+  echo "cma_lwm= cma_hwm= cma_offline_start=" >> boot/config.txt
+  echo "blacklist i2c_bcm2708" >> /etc/modprobe.d/blacklist.conf
+  echo "bcm2835-v4l2" >> /etc/modules-load.d/rpi-camera.conf
+fi
 
-echo 
-echo There we go, arch should now be installed on $install_pnt !
+sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' root/etc/ssh/sshd_config
+sed -i 's/#LLMNR=yes/LLMNR=no/g' root/etc/systemd/resolved.conf
+
+touch root/home/alarm/.script.sh
+
+cat <<EOT >> root/home/alarm/.script.sh
+pacman-key --init
+pacman-key --populate archlinuxarm
+echo "root:$pass_root" | chpasswd
+echo "alarm:$pass_main" | chpasswd
+usermod -l $name alarm
+EOT
+
+if [ $wifi == "y" ]; then
+  cat <<EOT >> root/home/alarm/.script.sh
+cd /etc/netctl/
+install -m640 examples/wireless-wpa wifi
+sed -i "s/ESSID='MyNetwork'/ESSID='$SSID'/g" wifi
+sed -i "s/Key='WirelessKey'/Key='$pass'/g" wifi
+netctl start wifi
+netctl enable wifi
+cd ~/
+EOT
+fi
+
+umount root/ boot/ 
+rm -r root/ boot/
+
+printf "There we go, arch should now be installed on $disk !\n"
+read -p "You can now plug your storage media in your raspberry pi. Press enter to continue."
+
+confirm "your pi's ip address"
+ip=$ret
+
+ssh-keygen -f "/root/.ssh/known_hosts" -R "$ip"
+
+ssh root@${ip} <<'ENDSSH'
+cd /home/alarm/
+chmod +x .script.sh
+./.script.sh
+exit
+ENDSSH
+
+printf "Ok, your raspberry pi should now be rebooting. You might want to check out any errors\n"
